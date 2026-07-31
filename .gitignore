@@ -1,0 +1,13 @@
+# Aruba CX OVA files (large, downloadable separately)
+Auba Simulator/
+ova-extracted/
+aruba-cx.qcow2
+*.qcow2
+
+# asciinema recording (large binary)
+session.cast
+
+# Temporary files
+*_b64.txt
+*.pyc
+__pycache__/

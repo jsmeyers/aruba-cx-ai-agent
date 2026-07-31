@@ -1,0 +1,12 @@
+[Unit]
+Description=Aruba CX AI Monitor - Run every 15 minutes
+Requires=ai-monitor.service
+
+[Timer]
+# Run every 15 minutes
+OnBootSec=2min
+OnUnitActiveSec=15min
+Unit=ai-monitor.service
+
+[Install]
+WantedBy=timers.target
