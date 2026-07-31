@@ -4,7 +4,13 @@ After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 /tmp/monitor.py --report
+ExecStart=/usr/bin/python3 /opt/ai-agent/monitor.py --report
 User=admin
+Group=administrators
 StandardOutput=journal
 StandardError=journal
+# Security hardening
+ProtectSystem=strict
+ReadWritePaths=/var/lib/ai-monitor /tmp
+PrivateTmp=false
+NoNewPrivileges=true

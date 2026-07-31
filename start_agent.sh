@@ -1,21 +1,24 @@
 #!/bin/sh
-# Aruba CX AI Agent Launcher
-# Run this from the Linux shell (start-shell) to start the AI agent
-# Usage: /tmp/start_agent.sh [options or prompt]
+# Aruba CX AI Agent Launcher v7
+# Deployed to /opt/ai-agent/ for security (not /tmp)
 #
-# Uses agent_v5.py - the latest agent with:
-#   - Dynamic switch info gathering at startup
-#   - Full switch CLI control via vtysh (show, configure, review)
-#   - Context memory across conversation turns
-#   - Error detection and automatic retry
-#   - Command logging to switch syslog (tag: AI-AGENT)
-#   - Up-arrow history via readline
+# Environment variables (set in /opt/ai-agent/agent.env):
+#   OLLAMA_URL       - Your Ollama server URL (https:// recommended)
+#   OLLAMA_API_KEY   - API key for Ollama
+#   OLLAMA_MODEL     - Model name (default: glm-5.2:cloud)
+#   OLLAMA_CA_CERT   - Path to CA cert for TLS pinning (optional)
+#   AGENT_AUTH_KEY   - Shared secret for agent access (optional)
+#   AGENT_MODE       - "readonly" for read-only mode (optional)
 #
-# Interactive mode:
-#   /tmp/start_agent.sh
-#
-# Single query:
-#   /tmp/start_agent.sh "Show me the status of all ports"
+# Usage:
+#   /opt/ai-agent/start_agent.sh              # Interactive mode
+#   /opt/ai-agent/start_agent.sh "show vlan"  # Single query
+#   /opt/ai-agent/start_agent.sh --read-only  # Read-only interactive mode
 
-echo "Starting Aruba CX AI Agent v5..."
-python3 /tmp/agent_v5.py "$@"
+# Load environment config if it exists
+if [ -f /opt/ai-agent/agent.env ]; then
+  . /opt/ai-agent/agent.env
+fi
+
+echo "Starting Aruba CX AI Agent v7..."
+python3 /opt/ai-agent/agent_v7.py "$@"

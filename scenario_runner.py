@@ -128,7 +128,7 @@ def run_scenario(agent_path, scenario, timeout=90):
         error = result.stderr
 
         # Check if it succeeded
-        success = "Error:" not in output[:200] and "SECURITY:" not in output[:200]
+        success = result.returncode == 0 and "Error:" not in output[:500] and "SECURITY:" not in output[:500] and "CRITICAL:" not in output[:500]
 
         # Count tool calls
         tool_calls = output.count("[Running:")
@@ -193,7 +193,7 @@ def run_scenario(agent_path, scenario, timeout=90):
         }
 
 def main():
-    agent_path = "/tmp/agent_v6.py"
+    agent_path = "/tmp/agent_v7.py"
     results = []
 
     print(f"Starting 15 CCIE-Level Playbook Scenarios")
