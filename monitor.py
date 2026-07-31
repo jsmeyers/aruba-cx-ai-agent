@@ -130,7 +130,7 @@ def check_ports():
                 ports_down.append(port)
         
         # Check for errors
-        if "Errors" in line and "0" != line.split()[-1] if len(line.split()) > 0 else False:
+        if "Errors" in line and len(line.split()) > 0 and line.split()[-1] != "0":
             ports_error.append(line.strip())
     
     # Get detailed error stats for ports that have errors
