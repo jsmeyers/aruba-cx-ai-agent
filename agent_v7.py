@@ -32,7 +32,10 @@ import sys
 import os
 import re
 import hashlib
-import readline
+try:
+    import readline  # Enables up-arrow history, line editing in interactive mode
+except ImportError:
+    pass  # readline not available, input() will work without history
 import time
 from datetime import datetime
 
@@ -558,7 +561,12 @@ def show_lldp():
     return run_cli_command("show lldp neighbor-info")
 
 def ping_host(target):
-    """Ping a host from the switch."""
+    """Ping a host from the switch. Validates target to prevent injection."""
+    # Validate target: only allow IPs, hostnames, and dots/hyphens
+    if not re.match(r'^[a-zA-Z0-9.\-]+$', target):
+        return "ERROR: Invalid ping target. Only IP addresses and hostnames are allowed."
+    if len(target) > 253:
+        return "ERROR: Ping target too long."
     return run_cli_command(f"ping {target} count 4")
 
 
@@ -604,12 +612,12 @@ TOOL_DEFINITIONS = [
 ]
 
 TOOL_HANDLERS = {
-    "run_cli": lambda args: run_cli_command(args.get("command", "")),
-    "run_cli_batch": lambda args: run_cli_commands(args.get("commands", [])),
-    "show_status": lambda args: show_all_status(),
-    "write_memory": lambda args: write_memory(),
-    "show_lldp": lambda args: show_lldp(),
-    "ping_host": lambda args: ping_host(args.get("target", "")),
+    "run_cli": lambda args, ro=False: run_cli_command(args.get("command", ""), read_only=ro),
+    "run_cli_batch": lambda args, ro=False: run_cli_commands(args.get("commands", []), read_only=ro),
+    "show_status": lambda args, ro=False: show_all_status(),
+    "write_memory": lambda args, ro=False: "BLOCKED: write_memory is not allowed in read-only mode" if ro else write_memory(),
+    "show_lldp": lambda args, ro=False: show_lldp(),
+    "ping_host": lambda args, ro=False: ping_host(args.get("target", "")),
 }
 
 
@@ -618,7 +626,15 @@ TOOL_HANDLERS = {
 MAX_CONVERSATION_MESSAGES = 50
 
 def call_ollama(messages, tools=None):
-    """Call Ollama chat completions API with optional TLS cert pinning."""
+    """Call Ollama chat completions API with optional TLS cert pinning.
+    Includes retry logic for transient network failures."""
+    # Check for unconfigured placeholder URL
+    if "YOUR_OLLAMA_SERVER" in OLLAMA_URL:
+        raise RuntimeError(
+            "OLLAMA_URL is not configured. Set the OLLAMA_URL environment variable "
+            "to your Ollama server address (e.g., http://10.0.0.1:11434)."
+        )
+
     payload = {"model": MODEL, "messages": messages, "stream": False}
     if tools:
         payload["tools"] = tools
@@ -627,26 +643,55 @@ def call_ollama(messages, tools=None):
     if OLLAMA_CA_CERT and os.path.exists(OLLAMA_CA_CERT):
         verify = OLLAMA_CA_CERT  # Pin to specific CA cert
 
-    resp = requests.post(
-        f"{OLLAMA_URL}/v1/chat/completions",
-        headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"},
-        json=payload, timeout=60, verify=verify
-    )
-    resp.raise_for_status()
-    return resp.json()
+    # Retry logic for transient failures
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            resp = requests.post(
+                f"{OLLAMA_URL}/v1/chat/completions",
+                headers={"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/json"},
+                json=payload, timeout=60, verify=verify
+            )
+            resp.raise_for_status()
+            return resp.json()
+        except requests.exceptions.ConnectionError as e:
+            if attempt < max_retries - 1:
+                wait = 2 ** attempt
+                print(f"  [Ollama connection error, retrying in {wait}s...]")
+                time.sleep(wait)
+                continue
+            raise RuntimeError(f"Cannot connect to Ollama server at {OLLAMA_URL}: {e}")
+        except requests.exceptions.Timeout:
+            if attempt < max_retries - 1:
+                wait = 2 ** attempt
+                print(f"  [Ollama timeout, retrying in {wait}s...]")
+                time.sleep(wait)
+                continue
+            raise RuntimeError(f"Ollama server at {OLLAMA_URL} timed out after 60s")
+        except requests.exceptions.HTTPError as e:
+            raise RuntimeError(f"Ollama server returned HTTP error: {e}")
+        except Exception as e:
+            raise RuntimeError(f"Error calling Ollama: {e}")
 
-def execute_tool_calls(tool_calls):
-    """Execute tool calls with dual-layer output wrapping."""
+def execute_tool_calls(tool_calls, read_only=False):
+    """Execute tool calls with dual-layer output wrapping and read-only enforcement."""
     results = []
     for tc in tool_calls:
         func_name = tc["function"]["name"]
         raw_args = tc["function"]["arguments"]
-        func_args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+        try:
+            func_args = json.loads(raw_args) if isinstance(raw_args, str) else raw_args
+        except (json.JSONDecodeError, TypeError) as e:
+            func_args = {}
+            print(f"  [WARN: Invalid JSON args from LLM: {e}]")
         arg_summary = json.dumps(func_args)
         if len(arg_summary) > 120: arg_summary = arg_summary[:120] + "..."
         print(f"  [Running: {func_name}({arg_summary})]")
         handler = TOOL_HANDLERS.get(func_name)
-        result = handler(func_args) if handler else f"Unknown function: {func_name}"
+        if handler:
+            result = handler(func_args, ro=read_only)
+        else:
+            result = f"Unknown function: {func_name}"
         if is_error_output(result):
             result = f"COMMAND ERROR (retry with corrected syntax): {result}"
             print(f"  [ERROR - will retry]")
@@ -677,7 +722,7 @@ def process_request(messages, tools=None, max_rounds=10, read_only=False):
         messages.append(msg)
         if msg.get("tool_calls"):
             print(f"  [Round {round_num + 1}/{max_rounds}] Running switch commands...")
-            tool_results = execute_tool_calls(msg["tool_calls"])
+            tool_results = execute_tool_calls(msg["tool_calls"], read_only=read_only)
             messages.extend(tool_results)
             continue
         return msg.get("content", "(no response)"), messages

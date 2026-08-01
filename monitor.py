@@ -28,9 +28,9 @@ import os
 import time
 from datetime import datetime
 
-OLLAMA_URL = "http://YOUR_OLLAMA_SERVER:11434"
-API_KEY = "your-api-key"
-MODEL = "glm-5.2:cloud"
+OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://YOUR_OLLAMA_SERVER:11434")
+API_KEY = os.environ.get("OLLAMA_API_KEY", "your-api-key")
+MODEL = os.environ.get("OLLAMA_MODEL", "glm-5.2:cloud")
 
 REPORT_FILE = "/tmp/monitor_report.txt"
 STATE_FILE = "/tmp/monitor_state.json"

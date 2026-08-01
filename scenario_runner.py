@@ -156,7 +156,7 @@ def run_scenario(agent_path, scenario, timeout=90):
         print(f"  Time: {elapsed:.1f}s")
         print(f"  Tool calls: {tool_calls}")
         print(f"  Had errors: {has_errors}")
-        print(f"  Had retries: {had_retries}")
+        print(f"  Had retries: {has_retries}")
         print(f"  Output preview: {output[:200]}...")
 
         return result_data
