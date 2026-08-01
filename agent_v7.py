@@ -825,8 +825,12 @@ if __name__ == "__main__":
     if prompt:
         log_to_switch("info", f"=== AI Agent v7 query: {prompt[:200]} ===")
         conv = [{"role": "system", "content": system_prompt}, {"role": "user", "content": prompt}]
-        response, conv = process_request(conv, tools=TOOL_DEFINITIONS, read_only=read_only)
-        print(response)
+        try:
+            response, conv = process_request(conv, tools=TOOL_DEFINITIONS, read_only=read_only)
+            print(response)
+        except RuntimeError as e:
+            print(f"\nError: {e}")
+            print("Please check your OLLAMA_URL setting and ensure the Ollama server is reachable.")
         log_to_switch("info", "=== AI Agent v7 query complete ===")
     else:
         interactive(system_prompt, read_only)
